@@ -1,0 +1,19 @@
+Patient: John Doe, Age 45
+
+Diagnosis: Type 2 Diabetes with hypertension
+
+Investigations Required:
+- CBC blood test to check hemoglobin levels
+- HbA1c blood test for diabetes monitoring
+- Liver function test (LFT)
+- Urine test for protein and creatinine
+
+Radiology:
+- Chest X-ray (PA view)
+- Ultrasound of abdomen
+
+Plan:
+- Follow up in 2 weeks with test reports
+- Refer to cardiologist for further evaluation
+- Next appointment scheduled in 14 days
+- Review blood pressure readings at next visit
