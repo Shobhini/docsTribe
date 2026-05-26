@@ -1,9 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import engine, Base
 from app.routes.notes import router as notes_router
-
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Docstribe Medical Notes Processor", version="1.0.0")
 
