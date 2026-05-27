@@ -125,3 +125,6 @@ Step 1: Upload the sample file.
 
 Step 2: Results after processing.
 <img width="1233" height="764" alt="image" src="https://github.com/user-attachments/assets/02901718-b71d-45c6-88e1-6f90398e4c7a" />
+
+Queue Dashboard
+<img width="1457" height="474" alt="image" src="https://github.com/user-attachments/assets/cdceb2a5-0364-471e-b327-00045ba54ee3" />
