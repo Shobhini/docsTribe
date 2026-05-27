@@ -7,6 +7,7 @@ Create Date: 2026-05-26
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 revision = '001'
 down_revision = None
@@ -15,9 +16,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create enum types first, skip if already exist (created by SQLAlchemy auto-create)
-    notestatus = sa.Enum('pending', 'processing', 'completed', 'failed', name='notestatus')
-    tasktype = sa.Enum('lab_test', 'radiology', 'followup', name='tasktype')
+    notestatus = postgresql.ENUM('pending', 'processing', 'completed', 'failed', name='notestatus', create_type=False)
+    tasktype = postgresql.ENUM('lab_test', 'radiology', 'followup', name='tasktype', create_type=False)
+
     notestatus.create(op.get_bind(), checkfirst=True)
     tasktype.create(op.get_bind(), checkfirst=True)
 
@@ -26,7 +27,7 @@ def upgrade() -> None:
         sa.Column('id', sa.String(), nullable=False),
         sa.Column('filename', sa.String(), nullable=False),
         sa.Column('raw_text', sa.Text(), nullable=True),
-        sa.Column('status', sa.Enum('pending', 'processing', 'completed', 'failed', name='notestatus', create_type=False), nullable=False),
+        sa.Column('status', postgresql.ENUM('pending', 'processing', 'completed', 'failed', name='notestatus', create_type=False), nullable=False),
         sa.Column('uploaded_at', sa.DateTime(), nullable=True),
         sa.Column('updated_at', sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint('id')
@@ -35,7 +36,7 @@ def upgrade() -> None:
         'extracted_tasks',
         sa.Column('id', sa.String(), nullable=False),
         sa.Column('note_id', sa.String(), nullable=False),
-        sa.Column('task_type', sa.Enum('lab_test', 'radiology', 'followup', name='tasktype', create_type=False), nullable=False),
+        sa.Column('task_type', postgresql.ENUM('lab_test', 'radiology', 'followup', name='tasktype', create_type=False), nullable=False),
         sa.Column('description', sa.Text(), nullable=False),
         sa.Column('created_at', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['note_id'], ['notes.id'], ),
