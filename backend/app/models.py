@@ -37,7 +37,7 @@ from datetime import datetime
 #   Enum      -> stores one value from a fixed list of choices
 #   DateTime  -> stores a date and time value
 #   ForeignKey-> links a column to another table's column
-from sqlalchemy import Column, String, Text, Enum, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, Enum, DateTime, ForeignKey, UniqueConstraint
 
 # 'relationship' tells SQLAlchemy that two tables are
 # connected, so you can access related rows easily.
@@ -143,6 +143,20 @@ class Note(Base):
     # to the current time whenever the row is modified.
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # processing_started_at: set when coordinator_task picks up the note.
+    # Lets you measure queue wait time: processing_started_at - uploaded_at.
+    processing_started_at = Column(DateTime, nullable=True)
+
+    # completed_at / failed_at: terminal state timestamps.
+    # Together with processing_started_at you can calculate extraction latency.
+    completed_at = Column(DateTime, nullable=True)
+    failed_at = Column(DateTime, nullable=True)
+
+    # celery_task_id: the ID Celery assigns to the coordinator_task.
+    # Store it so you can look up the task in Flower or via Celery's inspect API
+    # to trace exactly what happened to a note in the worker.
+    celery_task_id = Column(String, nullable=True)
+
     # -- RELATIONSHIP --
 
     # 'tasks' is not a real column in the database.
@@ -201,6 +215,13 @@ class ExtractedTask(Base):
 
     # created_at: when this task record was created.
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # DB-level unique constraint: even if app-level idempotency check is bypassed
+    # (e.g. two workers race), the database will reject duplicate rows.
+    # This is a defense-in-depth pattern: app logic first, DB constraint as backstop.
+    __table_args__ = (
+        UniqueConstraint("note_id", "task_type", "description", name="uq_task_per_note"),
+    )
 
     # -- RELATIONSHIP --
 

@@ -1,5 +1,6 @@
 import os
 import uuid
+import logging
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
@@ -9,6 +10,8 @@ from app.schemas import NoteUploadResponse, NoteStatusResponse, NoteResultsRespo
 from app.file_reader import read_file
 from app.tasks.coordinator import coordinator_task
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/notes", tags=["notes"])
 
 # Absolute path so uploads land in the same place regardless of cwd
@@ -16,25 +19,34 @@ UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".txt", ".pdf", ".png", ".jpg", ".jpeg"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 @router.post("/upload", response_model=NoteUploadResponse)
 async def upload_note(file: UploadFile = File(...), db: Session = Depends(get_db)):
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
+        logger.warning("Rejected upload: unsupported extension %s (file=%s)", ext, file.filename)
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        logger.warning("Rejected upload: file too large (%d bytes, file=%s)", len(contents), file.filename)
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10 MB.")
 
     note_id = str(uuid.uuid4())
     file_path = os.path.join(UPLOAD_DIR, f"{note_id}{ext}")
 
-    contents = await file.read()
     with open(file_path, "wb") as f:
         f.write(contents)
+
+    logger.info("Saved upload note_id=%s filename=%s size=%d bytes", note_id, file.filename, len(contents))
 
     try:
         raw_text = read_file(file_path, file.filename)
     except Exception as e:
         os.remove(file_path)
+        logger.exception("Failed to read file note_id=%s filename=%s", note_id, file.filename)
         raise HTTPException(status_code=422, detail=f"Could not read file: {str(e)}")
 
     try:
@@ -48,9 +60,15 @@ async def upload_note(file: UploadFile = File(...), db: Session = Depends(get_db
         db.commit()
     except Exception:
         os.remove(file_path)
+        logger.exception("DB insert failed for note_id=%s", note_id)
         raise
 
-    coordinator_task.delay(note_id)
+    result = coordinator_task.delay(note_id)
+    # Store the Celery task ID so we can trace this job in Flower
+    note.celery_task_id = result.id
+    db.commit()
+
+    logger.info("Queued coordinator_task note_id=%s celery_task_id=%s", note_id, result.id)
 
     return NoteUploadResponse(note_id=note_id, status=NoteStatus.pending)
 

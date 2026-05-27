@@ -16,6 +16,10 @@ class NoteStatusResponse(BaseModel):
     note_id: str
     status: NoteStatus
     uploaded_at: datetime
+    processing_started_at: datetime | None = None
+    completed_at: datetime | None = None
+    failed_at: datetime | None = None
+    celery_task_id: str | None = None
 
     class Config:
         from_attributes = True
