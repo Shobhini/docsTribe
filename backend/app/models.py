@@ -37,7 +37,7 @@ from datetime import datetime
 #   Enum      -> stores one value from a fixed list of choices
 #   DateTime  -> stores a date and time value
 #   ForeignKey-> links a column to another table's column
-from sqlalchemy import Column, String, Text, Enum, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Text, Enum, DateTime, ForeignKey, UniqueConstraint, Boolean
 
 # 'relationship' tells SQLAlchemy that two tables are
 # connected, so you can access related rows easily.
@@ -52,6 +52,21 @@ import enum
 # Our models inherit from this so SQLAlchemy recognizes them
 # as database tables.
 from app.database import Base
+
+
+# -- USER TABLE -----------------------------------------------
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String, unique=True, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    notes = relationship("Note", back_populates="user", cascade="all, delete-orphan")
 
 
 # -- ENUMS ----------------------------------------------------
@@ -157,6 +172,10 @@ class Note(Base):
     # to trace exactly what happened to a note in the worker.
     celery_task_id = Column(String, nullable=True)
 
+    # user_id: which user uploaded this note.
+    # nullable=True so existing rows without a user don't break.
+    user_id = Column(String, ForeignKey("users.id"), nullable=True)
+
     # -- RELATIONSHIP --
 
     # 'tasks' is not a real column in the database.
@@ -179,6 +198,7 @@ class Note(Base):
         back_populates="note",
         cascade="all, delete-orphan"
     )
+    user = relationship("User", back_populates="notes")
 
 
 # -- EXTRACTED TASK TABLE -------------------------------------
