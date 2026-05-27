@@ -119,6 +119,95 @@ docker compose exec api python -m pytest tests/ -v
 
 ---
 
+## Authentication
+
+All note endpoints are protected with **JWT (JSON Web Token)** authentication.
+
+### Flow
+
+```
+Register / Login
+      │
+      ▼
+POST /api/auth/register  ──►  { access_token, token_type }
+POST /api/auth/login     ──►  { access_token, token_type }
+      │
+      ▼
+Client stores token in localStorage
+      │
+      ▼
+Every API request sends:
+Authorization: Bearer <token>
+      │
+      ▼
+FastAPI get_current_user() dependency
+├── extracts token from Authorization header
+├── verifies JWT signature + expiry
+└── returns User from DB — or raises HTTP 401
+```
+
+### Auth Endpoints
+
+| Method | Endpoint | Body | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/auth/register` | `{ name, email, password }` | Create account, returns JWT |
+| `POST` | `/api/auth/login` | form: `username` + `password` | Login, returns JWT |
+
+### Register example
+
+```bash
+curl -X POST http://localhost:8000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Shobhini", "email": "you@example.com", "password": "yourpassword"}'
+```
+
+### Login example
+
+```bash
+curl -X POST http://localhost:8000/api/auth/login \
+  -d "username=you@example.com&password=yourpassword"
+```
+
+Both return:
+```json
+{ "access_token": "eyJ...", "token_type": "bearer" }
+```
+
+### Using the token
+
+```bash
+curl http://localhost:8000/api/notes/ \
+  -H "Authorization: Bearer eyJ..."
+```
+
+### How it works
+
+- **Password hashing:** `passlib` with `bcrypt` — passwords are one-way hashed, never stored in plain text
+- **JWT signing:** `python-jose` with `HS256` algorithm. Payload contains `sub` (user ID), `email`, `name`, `exp` (expiry)
+- **Token expiry:** 24 hours
+- **User scoping:** Notes are tied to `user_id`. Users can only see and access their own notes — even if they know another note's UUID
+- **Stateless:** No server-side session storage. The token is verified mathematically on every request
+
+### Database schema — `users` table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID (PK) | Auto-generated |
+| `name` | String | Display name shown in the UI |
+| `email` | String (unique) | Login credential |
+| `hashed_password` | String | bcrypt hash — never the plain password |
+| `is_active` | Boolean | Account active flag |
+| `created_at` | DateTime | Registration timestamp |
+
+### Testing auth in Swagger UI
+
+1. Open `http://localhost:8000/docs`
+2. Click **Authorize** (top right)
+3. Enter your email as `username` and your password
+4. Click **Authorize** — all subsequent requests in the docs will include the token automatically
+
+---
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
@@ -158,6 +247,7 @@ docker compose exec api python -m pytest tests/ -v
 | `completed_at` | DateTime | When extraction finished successfully |
 | `failed_at` | DateTime | When the note was marked failed |
 | `celery_task_id` | String | Celery task ID for Flower traceability |
+| `user_id` | UUID (FK) | References `users.id` — owner of this note |
 
 **`extracted_tasks` table**
 
@@ -199,13 +289,15 @@ docsTribe/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              # FastAPI app, logging config
-│   │   ├── models.py            # SQLAlchemy ORM models (Note, ExtractedTask)
+│   │   ├── models.py            # SQLAlchemy ORM models (User, Note, ExtractedTask)
 │   │   ├── schemas.py           # Pydantic response schemas
 │   │   ├── database.py          # DB engine, session factory, Base
 │   │   ├── celery_app.py        # Celery instance + config
 │   │   ├── file_reader.py       # txt/pdf/image → raw text
+│   │   ├── auth.py              # JWT creation, password hashing, get_current_user dependency
 │   │   ├── routes/
-│   │   │   └── notes.py         # All API route handlers
+│   │   │   ├── auth.py          # Register + login endpoints
+│   │   │   └── notes.py         # Note endpoints (all protected)
 │   │   ├── tasks/
 │   │   │   ├── coordinator.py   # Entry point task, chord dispatch
 │   │   │   ├── lab.py           # Lab test extraction task
@@ -224,7 +316,8 @@ docsTribe/
 │   └── Dockerfile
 ├── frontend/
 │   ├── pages/
-│   │   ├── index.js             # Upload page
+│   │   ├── login.js             # Login + register page
+│   │   ├── index.js             # Upload page (protected, shows username)
 │   │   └── results/[note_id].js # Results page with polling
 │   └── Dockerfile
 ├── docker-compose.yml
@@ -239,6 +332,7 @@ docsTribe/
 | Layer | Technology |
 |-------|-----------|
 | Backend API | FastAPI + Uvicorn |
+| Authentication | JWT (python-jose) + bcrypt (passlib) |
 | Task Queue | Celery 5 (chord pattern) |
 | Message Broker + Result Backend | Redis 7 |
 | Database | PostgreSQL 15 |
