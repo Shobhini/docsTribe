@@ -345,6 +345,78 @@ docsTribe/
 | Testing | pytest (21 tests) |
 
 ---
+
+## Design Decisions & Tradeoffs
+
+### Why rule-based extraction instead of an LLM?
+
+Rule-based keyword matching was chosen deliberately:
+- **Deterministic** — same input always produces the same output, easy to test and debug
+- **No cost** — no API credits, no rate limits, no latency from external calls
+- **No hallucination** — the extractor only returns sentences that actually exist in the note
+- **Architecture is LLM-ready** — the extractor functions (`extract_lab_tests`, `extract_radiology`, `extract_followups`) are isolated behind a simple interface. Swapping them for an LLM call requires changing only those functions — zero changes to the API, worker, or database
+
+### Why Celery chord instead of sequential tasks?
+
+Lab tests, radiology, and follow-up extraction are fully independent — they read the same text and write to separate rows. Running them sequentially would mean waiting for task 1 to finish before starting task 2, wasting time. A `chord()` fans them out in parallel and fires a callback only when all three complete. For larger notes this can cut processing time by 2-3x.
+
+### Why polling instead of WebSockets?
+
+Polling every 3 seconds is acceptable because:
+- Notes process in under 1 second — users rarely wait through more than one poll cycle
+- Simpler frontend code with no persistent connection management
+- No additional infrastructure (no WebSocket server or pub/sub layer)
+
+WebSocket would be the right upgrade if processing times grew to 30+ seconds.
+
+### Why JWT instead of sessions?
+
+Sessions require a shared store (Redis or DB) that every API instance must read from. This breaks horizontal scaling — if request 1 hits server A and request 2 hits server B, server B doesn't know about server A's sessions. JWT is self-contained and verified mathematically, with no shared state. Any API instance can validate any token independently.
+
+### Why Redis for both broker and result backend?
+
+Redis is operationally simple — one service, already required as the Celery broker. The result backend is needed specifically for `chord()` to know when all subtasks are done. In production, RabbitMQ (more durable, better routing) as broker and PostgreSQL (persistent results) as backend would be the right split.
+
+### Why store `celery_task_id` in the notes table?
+
+When a note gets stuck in `processing` state, you need a way to find what happened. Storing the Celery task ID lets you look it up directly in Flower or query Celery's result backend to see exactly which retry it's on, what the error was, and which worker handled it. Without it, debugging distributed failures is guesswork.
+
+### Why `nullable=True` on `user_id` in notes?
+
+Existing rows in the database were inserted before authentication was added. Setting `nullable=False` on the migration would fail on those rows. The migration uses `nullable=True` to keep backward compatibility, with the application enforcing ownership at the query level (`filter(Note.user_id == current_user.id)`).
+
+---
+
+## Known Limitations
+
+| Limitation | Details |
+|------------|---------|
+| JWT revocation | Tokens remain valid until expiry even after logout. No blacklist. Production fix: short-lived tokens (15 min) + refresh token flow |
+| `localStorage` for token | Accessible to JavaScript — vulnerable to XSS. Production fix: HttpOnly secure cookies |
+| Single Redis instance | No persistence, no HA. If Redis restarts, queued tasks are lost. Production fix: Redis AOF persistence or RabbitMQ |
+| Local filesystem uploads | Files stored in a Docker volume. Not accessible across multiple API instances. Production fix: S3 or GCS |
+| OCR accuracy | Depends on image quality. Low-resolution or handwritten notes may produce poor text extraction |
+| Rule-based extraction | Keyword matching misses paraphrased or unusual phrasing. Production fix: LLM-based extraction |
+| No refresh tokens | Access token expires in 24h, user must log in again. Production fix: refresh token endpoint |
+| Single Celery worker | No concurrency config. High load would queue up. Production fix: `--concurrency=N` or multiple worker containers |
+
+---
+
+## Future Improvements
+
+| Improvement | Why |
+|-------------|-----|
+| Replace polling with WebSockets | Real-time updates without repeated HTTP requests |
+| Refresh token flow | Short-lived access tokens + long-lived refresh tokens for better security |
+| S3/GCS for file storage | Scalable, durable, accessible across multiple API instances |
+| LLM-based extraction | Higher accuracy, handles paraphrasing and unusual medical terminology |
+| Prometheus + Grafana | Metrics for request latency, queue depth, extraction success rate |
+| Kubernetes deployment | Auto-scaling workers based on queue depth |
+| Queue separation | Dedicated queues for OCR (CPU-heavy) vs text extraction (lightweight) |
+| Rate limiting | Prevent abuse on upload and auth endpoints |
+
+---
+
 ## Screenshots
 UI
 <img width="1222" height="719" alt="image" src="https://github.com/user-attachments/assets/b96359f4-2cd0-496a-88a8-9f76e205e3a2" />
