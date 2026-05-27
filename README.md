@@ -23,9 +23,9 @@ User uploads file
            coordinator_task
            ├── sets status=processing
            └── chord() — fans out 3 parallel tasks:
-               ├── lab_extraction_task      ─┐
+               ├── lab_extraction_task       ─┐
                ├── radiology_extraction_task  ├─► all succeed → on_extraction_complete
-               └── followup_extraction_task ─┘         │
+               └── followup_extraction_task  ─┘         │
                                                         ▼
                                               sets status=completed
                                               saves extracted tasks → PostgreSQL
@@ -72,23 +72,6 @@ docker compose exec api alembic upgrade head
 ```bash
 docker compose exec api python -m pytest tests/ -v
 ```
-
----
-
-## Screenshots
-
-**Upload page**
-
-<img width="1093" alt="Upload page" src="https://github.com/user-attachments/assets/1b416f04-2b3a-4542-bf53-b00f89bce3f8" />
-
-**Results page**
-
-<img width="1233" alt="Results page" src="https://github.com/user-attachments/assets/02901718-b71d-45c6-88e1-6f90398e4c7a" />
-
-**Flower dashboard — after processing one note (5 tasks, all succeeded)**
-
-<img width="1222" alt="Flower dashboard" src="https://github.com/user-attachments/assets/b96359f4-2cd0-496a-88a8-9f76e205e3a2" />
-
 ---
 
 ## How It Works
@@ -267,6 +250,8 @@ docsTribe/
 | Task Monitoring | Flower |
 | Testing | pytest (21 tests) |
 
+---
+## Screenshots
 UI
 <img width="1222" height="719" alt="image" src="https://github.com/user-attachments/assets/b96359f4-2cd0-496a-88a8-9f76e205e3a2" />
 
