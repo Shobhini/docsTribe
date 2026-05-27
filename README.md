@@ -6,7 +6,7 @@ A full-stack system that accepts uploaded medical notes/prescriptions, processes
 
 ```
 Upload → FastAPI → Redis → Celery coordinator_task
-                              ├── lab_extraction_task      ┐
+                              ├── lab_extraction_task       ┐
                               ├── radiology_extraction_task ├─ chord() → on_complete → status=completed
                               └── followup_extraction_task  ┘
                                         ↓
@@ -116,3 +116,12 @@ docsTribe/
 | Frontend | Next.js 14 + Tailwind CSS |
 | Containerization | Docker Compose |
 | Testing | pytest (21 tests) |
+
+UI
+<img width="1222" height="719" alt="image" src="https://github.com/user-attachments/assets/b96359f4-2cd0-496a-88a8-9f76e205e3a2" />
+
+Step 1: Upload the sample file.
+<img width="1093" height="622" alt="image" src="https://github.com/user-attachments/assets/1b416f04-2b3a-4542-bf53-b00f89bce3f8" />
+
+Step 2: Results after processing.
+<img width="1233" height="764" alt="image" src="https://github.com/user-attachments/assets/02901718-b71d-45c6-88e1-6f90398e4c7a" />
