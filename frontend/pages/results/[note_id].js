@@ -17,7 +17,15 @@ export default function Results() {
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/notes/${note_id}/status`)
+        const token = localStorage.getItem('token')
+        const headers = token ? { Authorization: `Bearer ${token}` } : {}
+
+        const res = await fetch(`/api/notes/${note_id}/status`, { headers })
+        if (res.status === 401) {
+          clearInterval(intervalRef.current)
+          router.push('/login')
+          return
+        }
         if (!res.ok) {
           setError('Note not found')
           clearInterval(intervalRef.current)
@@ -28,7 +36,7 @@ export default function Results() {
 
         if (data.status === 'completed') {
           clearInterval(intervalRef.current)
-          const resultsRes = await fetch(`/api/notes/${note_id}/results`)
+          const resultsRes = await fetch(`/api/notes/${note_id}/results`, { headers })
           const resultsData = await resultsRes.json()
           setResults(resultsData.tasks)
         } else if (data.status === 'failed') {

@@ -5,10 +5,11 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
-from app.models import Note, ExtractedTask, NoteStatus, TaskType
+from app.models import Note, ExtractedTask, NoteStatus, TaskType, User
 from app.schemas import NoteUploadResponse, NoteStatusResponse, NoteResultsResponse, NoteListItem
 from app.file_reader import read_file
 from app.tasks.coordinator import coordinator_task
+from app.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,11 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 @router.post("/upload", response_model=NoteUploadResponse)
-async def upload_note(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_note(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         logger.warning("Rejected upload: unsupported extension %s (file=%s)", ext, file.filename)
@@ -55,6 +60,7 @@ async def upload_note(file: UploadFile = File(...), db: Session = Depends(get_db
             filename=file.filename,
             raw_text=raw_text,
             status=NoteStatus.pending,
+            user_id=current_user.id,
         )
         db.add(note)
         db.commit()
@@ -74,8 +80,16 @@ async def upload_note(file: UploadFile = File(...), db: Session = Depends(get_db
 
 
 @router.get("/", response_model=List[NoteListItem])
-def list_notes(db: Session = Depends(get_db)):
-    notes = db.query(Note).order_by(Note.uploaded_at.desc()).all()
+def list_notes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    notes = (
+        db.query(Note)
+        .filter(Note.user_id == current_user.id)
+        .order_by(Note.uploaded_at.desc())
+        .all()
+    )
     return [
         NoteListItem(
             note_id=n.id,
@@ -88,8 +102,12 @@ def list_notes(db: Session = Depends(get_db)):
 
 
 @router.get("/{note_id}/status", response_model=NoteStatusResponse)
-def get_status(note_id: str, db: Session = Depends(get_db)):
-    note = db.query(Note).filter(Note.id == note_id).first()
+def get_status(
+    note_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    note = db.query(Note).filter(Note.id == note_id, Note.user_id == current_user.id).first()
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
     return NoteStatusResponse(
@@ -100,8 +118,12 @@ def get_status(note_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{note_id}/results", response_model=NoteResultsResponse)
-def get_results(note_id: str, db: Session = Depends(get_db)):
-    note = db.query(Note).filter(Note.id == note_id).first()
+def get_results(
+    note_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    note = db.query(Note).filter(Note.id == note_id, Note.user_id == current_user.id).first()
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
 

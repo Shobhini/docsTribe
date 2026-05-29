@@ -2,6 +2,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.notes import router as notes_router
+from app.routes.auth import router as auth_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,6 +19,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(notes_router)
 
 
