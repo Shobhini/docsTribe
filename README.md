@@ -4,6 +4,8 @@ A full-stack system that accepts uploaded medical notes, processes them asynchro
 
 Built with FastAPI, Celery, Redis, PostgreSQL, and Next.js. All services run in Docker.
 
+Demo Video: https://www.loom.com/share/95507cc7479a42cda0b771646e89ce58
+
 ---
 
 ## Architecture
